@@ -1,0 +1,8 @@
+{
+    "user-agent": "Dart\/3.6 (dart:io)",
+    "accept": "application\/json",
+    "accept-encoding": "gzip",
+    "host": "192.168.0.100",
+    "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0IiwiYXVkIjoiaHR0cDovL2xvY2FsaG9zdCIsImlhdCI6MTc0MDY3NDIyNSwiZXhwIjoxNzQwNjc3ODI1LCJkYXRhIjp7ImlkIjoiMTciLCJuYW1lIjoidmFpc2hha3R0IiwiZW1haWwiOiJ2YWlkYmFrQGdtYWlsLmNvbSIsInJvbGxfbm8iOiIyMWNzMTExOCIsInllYXIiOiI0IiwiY291cnNlIjoiY3NlIGEiLCJidXNfc3RvcCI6ImlydWd1ciIsInBob25lX251bWJlciI6IjEyMzQ1Njc4OTAiLCJyb3V0ZV9ubyI6IjMyIn19.diftVIA6WEIlxeNSBvz8zXiBGGr1ul537PR3Y-NmQHM",
+    "content-type": "application\/json"
+}
