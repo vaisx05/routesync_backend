@@ -4,8 +4,9 @@ const http = require("http");
 const dotenv = require("dotenv");
 const authRoutes = require("./routes/auth");
 const studentRoutes = require("./routes/student");
+const startBusRoutes = require("./routes/start-bus");
+const { router: fetchLocationRoutes, initWebSocket } = require("./routes/fetch-location"); // Import WebSocket and routes
 const authMiddleware = require("./middleware/authMiddleware");
-const initWebSocket = require("./routes/ws-server");
 
 // Load environment variables
 dotenv.config();
@@ -21,19 +22,12 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/student", authMiddleware, studentRoutes); // Protected student routes
+app.use("/api/driver", startBusRoutes);
+app.use("/api", fetchLocationRoutes); // Add fetch-location routes
 
-// Initialize WebSocket Server
+// Initialize WebSocket Server for fetch-location
 initWebSocket(server);
 
 // Start Express Server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-
-// Graceful Shutdown Handling
-process.on("SIGINT", () => {
-  console.log("🛑 Server shutting down...");
-  server.close(() => {
-    console.log("✅ Server closed.");
-    process.exit(0);
-  });
-});

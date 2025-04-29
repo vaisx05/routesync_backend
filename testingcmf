@@ -1,0 +1,294 @@
+To test the functionality of your database and WebSocket server using Postman, follow these steps:
+
+---
+
+### **1. Start the Server**
+Ensure your server is running:
+```bash
+node server.js
+```
+
+---
+
+### **2. Test Adding a User (Signup)**
+Use the `/api/auth/signup` endpoint to add a user.
+
+#### Request Details:
+- **Method**: `POST`
+- **URL**: `http://localhost:5000/api/auth/signup`
+- **Headers**:
+  - `Content-Type`: `application/json`
+- **Body** (JSON):
+  For a student:
+  ```json
+  {
+    "username": "student1",
+    "email_id": "student1@drngpit.ac.in.com",
+    "password": "password123",
+    "user_type": "student",
+    "roll_no": "21CS101"
+  }
+  ```
+  For a driver:
+  ```json
+  {
+    "username": "driver1",
+    "email_id": "driver1@example.com",
+    "password": "password123",
+    "user_type": "driver",
+    "roll_no": null
+  }
+  ```
+
+#### Expected Response:
+- **Status**: `201 Created`
+- **Body**:
+  ```json
+  {
+    "token": "JWT_TOKEN",
+    "user": {
+      "user_id": 1,
+      "username": "student1",
+      "email_id": "student1@example.com",
+      "user_type": "student",
+      "roll_no": "21CS101",
+      "created_at": "2025-04-28T12:00:00.000Z"
+    }
+  }
+  ```
+
+---
+
+### **3. Test Adding a Bus**
+Use the `/api/driver/startbus` endpoint to add a bus and assign it to a route.
+
+#### Request Details:
+- **Method**: `POST`
+- **URL**: `http://localhost:5000/api/driver/startbus`
+- **Headers**:
+  - `Content-Type`: `application/json`
+- **Body** (JSON):
+  ```json
+  {
+    "bus_number": "Bus 101",
+    "route_number": "Route 1",
+    "driver_id": 1
+  }
+  ```
+
+#### Expected Response:
+- **Status**: `200 OK`
+- **Body**:
+  ```json
+  {
+    "bus_id": 1,
+    "bus_number": "Bus 101",
+    "route_id": 1,
+    "status": "in_use",
+    "created_at": "2025-04-28T12:00:00.000Z"
+  }
+  ```
+
+---
+
+### **4. Test Fetching Student Details**
+Use the `/api/student/student-details` endpoint to fetch student details.
+
+#### Request Details:
+- **Method**: `GET`
+- **URL**: `http://localhost:5000/api/student/student-details`
+- **Headers**:
+  - `Authorization`: `Bearer JWT_TOKEN` (from the signup response)
+
+#### Expected Response:
+- **Status**: `200 OK`
+- **Body**:
+  ```json
+  {
+    "name": "student1",
+    "email": "student1@example.com",
+    "roll_no": "21CS101",
+    "route_no": "Route 1",
+    "year": "2025"
+  }
+  ```
+
+---
+
+### **5. Test Live Location Updates**
+Use a WebSocket client (e.g., Postman or a custom script) to send location updates.
+
+#### WebSocket Connection:
+- **URL**: `ws://localhost:5000`
+
+#### Send Location Update:
+```json
+{
+  "bus_id": 1,
+  "latitude": 12.971598,
+  "longitude": 77.594566
+}
+```
+
+#### Expected Broadcast:
+- **Message to All Clients**:
+  ```json
+  {
+    "location_id": 101,
+    "bus_id": 1,
+    "latitude": 12.971598,
+    "longitude": 77.594566,
+    "timestamp": "2025-04-28T12:00:00Z"
+  }
+  ```
+
+---
+
+### **6. Verify in the Database**
+Run the following SQL queries to verify the data:
+- **Users**:
+  ```sql
+  SELECT * FROM Users;
+  ```
+- **Buses**:
+  ```sql
+  SELECT * FROM Buses;
+  ```
+- **GPS_Location**:
+  ```sql
+  SELECT * FROM GPS_Location;
+  ```
+
+Let me know if you need further assistance!
+
+
+
+
+////////////////////////////////////////////
+
+The error `null value in column "capacity" of relation "buses" violates not-null constraint` occurs because the `capacity` column in the `Buses` table is defined as `NOT NULL`, but no value is being provided for it in the `INSERT` query in your `start-bus.js` file.
+
+---
+
+### **Fix in `start-bus.js`**
+Update the `INSERT` query in the `/start-bus` route to include the `capacity` field. For example:
+
+```javascript
+router.post("/start-bus", async (req, res) => {
+  const { bus_number, route_number, driver_id, capacity } = req.body; // Add capacity to the request body
+
+  try {
+    // Insert bus and route data into the database
+    const result = await pool.query(
+      `INSERT INTO Buses (bus_number, route_id, status, capacity) 
+       VALUES ($1, (SELECT route_id FROM Routes WHERE route_name = $2), 'in_use', $3) 
+       RETURNING *`,
+      [bus_number, route_number, capacity] // Include capacity in the query parameters
+    );
+
+    // Update driver status to 'in_use'
+    await pool.query(
+      `UPDATE Drivers SET status = 'in_use' WHERE driver_id = $1`,
+      [driver_id]
+    );
+
+    // Send bus start status using WebSocket
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ bus_number, route_number, status: 'started' }));
+      }
+    });
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server error");
+  }
+});
+```
+
+---
+
+### **Update Postman Request**
+When testing the `/api/driver/start-bus` endpoint, include the `capacity` field in the request body:
+
+#### Request Details:
+- **Method**: `POST`
+- **URL**: `http://localhost:5000/api/driver/start-bus`
+- **Headers**:
+  - `Content-Type`: `application/json`
+- **Body** (JSON):
+  ```json
+  {
+    "bus_number": "Bus 101",
+    "route_number": "Route 1",
+    "driver_id": 1,
+    "capacity": 50
+  }
+  ```
+
+---
+
+### **Verify the Fix**
+1. Restart your server:
+   ```bash
+   node server.js
+   ```
+2. Test the endpoint again using Postman.
+3. Check the `Buses` table in your database to confirm the `capacity` value is being inserted:
+   ```sql
+   SELECT * FROM Buses;
+   ```
+
+Let me know if you encounter further issues!
+
+///////////////////////////////////
+
+const express = require("express");
+const router = express.Router();
+const pool = require("../config/db");
+
+// Fetch all enrollments
+router.get("/enrollments", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM student_bus_enrollment");
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching enrollments:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Fetch enrollments for a specific student
+router.get("/enrollments/:student_id", async (req, res) => {
+  const { student_id } = req.params;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM student_bus_enrollment WHERE student_id = $1",
+      [student_id]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching enrollments:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+module.exports = router;
+
+/////////////////////////////////
+
+
+INSERT INTO Routes (route_name, starting_point, destination, stops, created_at, updated_at)
+VALUES (
+  'Route 1', 
+  'Sulur', 
+  'NGP', 
+  '[{"stop_name": "Sulur", "latitude": 77.12463645736983,
+           "longitude": 11.025382513469097}, {"stop_name": "Papampatti Pirivu", "latitude":  77.08014467842065,
+          "longitude": 11.009931159069254 }, {"stop_name": "Irugur", "latitude": 77.06869232562462,
+          "longitude": 11.0062852518424564 },{"stop_name": "NGP", "latitude": 77.03484882078436,
+          "longitude": 11.062154795648127 }]',
+  NOW(),
+  NOW()
+);

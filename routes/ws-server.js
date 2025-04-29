@@ -6,11 +6,12 @@ const pool = new Pool({
   user: "postgres",
   host: "localhost",
   database: "routesyncdb",
-  password: "2004",
+  password: "root",
   port: 5432,
 });
 
-module.exports = (server) => {
+// Function to initialize WebSocket server
+const initWebSocket = (server) => {
   const wss = new WebSocket.Server({ server });
 
   console.log("✅ WebSocket server is running!");
@@ -23,42 +24,45 @@ module.exports = (server) => {
         const data = JSON.parse(message);
         console.log("📩 Received Data:", data);
 
+        // Map incoming fields to expected fields
+        const bus_id = data.id;
+        const latitude = data.latitude;
+        const longitude = data.longitude;
+
         // Ensure required fields are present
-        if (!data.bus_id || !data.latitude || !data.longitude) {
+        if (!bus_id || !latitude || !longitude) {
           console.error("❌ Missing required fields");
           ws.send(JSON.stringify({ error: "Missing required fields" }));
           return;
         }
 
-        // Check if bus exists
-        const busCheck = await pool.query(
-          "SELECT * FROM buses WHERE bus_id = $1",
-          [data.bus_id]
+        // Check if a row exists in gps_location for the given bus_id
+        const locationCheck = await pool.query(
+          "SELECT * FROM gps_location WHERE bus_id = $1",
+          [bus_id]
         );
 
-        if (busCheck.rows.length === 0) {
-          console.error("❌ Bus ID not found");
-          ws.send(JSON.stringify({ error: "Invalid bus ID" }));
-          return;
+        let result;
+        if (locationCheck.rows.length === 0) {
+          // Insert a new row if it doesn't exist
+          const insertQuery = `
+            INSERT INTO gps_location (bus_id, latitude, longitude, timestamp)
+            VALUES ($1, $2, $3, NOW())
+            RETURNING *;
+          `;
+          result = await pool.query(insertQuery, [bus_id, latitude, longitude]);
+          console.log("✅ New location inserted:", result.rows[0]);
+        } else {
+          // Update the existing row
+          const updateQuery = `
+            UPDATE gps_location
+            SET latitude = $2, longitude = $3, timestamp = NOW()
+            WHERE bus_id = $1
+            RETURNING *;
+          `;
+          result = await pool.query(updateQuery, [bus_id, latitude, longitude]);
+          console.log("✅ Location updated successfully:", result.rows[0]);
         }
-
-        // Insert into GPS_Location Table
-        const query = `
-          INSERT INTO gps_location (bus_id, latitude, longitude) 
-          VALUES ($1, $2, $3)
-          RETURNING *;
-        `;
-
-        console.log("Executing query:", query);
-        console.log("With parameters:", [data.bus_id, data.latitude, data.longitude]);
-
-        const result = await pool.query(query, [
-          data.bus_id,
-          data.latitude,
-          data.longitude,
-        ]);
-
-        console.log("✅ Database updated successfully:", result.rows[0]);
 
         // Broadcast the update to all connected clients
         wss.clients.forEach((client) => {
@@ -66,7 +70,6 @@ module.exports = (server) => {
             client.send(JSON.stringify(result.rows[0]));
           }
         });
-
       } catch (error) {
         console.error("❌ Database Error:", error);
         ws.send(JSON.stringify({ error: "Internal server error" }));
@@ -78,3 +81,5 @@ module.exports = (server) => {
     });
   });
 };
+
+module.exports = initWebSocket;
